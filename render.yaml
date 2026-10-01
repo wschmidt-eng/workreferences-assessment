@@ -1,0 +1,36 @@
+# Render Blueprint for the WorkReferences Free Reference Risk Assessment.
+# One web service on a paid instance (persistent disks need a paid plan).
+services:
+  - type: web
+    name: workreferences-assessment
+    runtime: node
+    plan: starter
+    region: virginia
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    # Custom domain. After the first deploy, add the DNS record shown in
+    # RENDER_DEPLOY.md (Step 3) and click Verify in Settings > Custom Domains.
+    domains:
+      - assessment.workreferences.com
+    # Keep the onrender.com address on until the custom domain is verified.
+    # Optional later: change to "disabled" so only assessment.workreferences.com works.
+    renderSubdomainPolicy: enabled
+    disk:
+      name: assessment-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DATA_DIR
+        value: /var/data
+      - key: ADMIN_PASSCODE
+        sync: false # entered in the Render dashboard, never committed
+      - key: BOOKING_URL
+        value: https://live.vcita.com/site/27x9gds0opl46jcy/online-scheduling?service=48a5dda49xy1aaj3
+      - key: RESEARCH_MIN_RESPONSES
+        value: "25"
+      # Do NOT add RESEARCH_SAMPLE here. It is for the preview only.
