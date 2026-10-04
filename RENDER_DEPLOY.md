@@ -40,6 +40,12 @@ The free plan won't work because it has no persistent disk: every restart would 
 | `ADMIN_PASSCODE` | your new passcode, kept secret | Unlocks the consultant view at `/#/admin` |
 | `BOOKING_URL` | `https://live.vcita.com/site/27x9gds0opl46jcy/online-scheduling?service=48a5dda49xy1aaj3` | vCita booking page. Name, email and phone are pre-filled automatically |
 | `RESEARCH_MIN_RESPONSES` | `25` | Research chart stays hidden until this many assessments are complete |
+| `SMTP_HOST` | `smtp.gmail.com` | Google Workspace mail server for the alerts |
+| `SMTP_PORT` | `465` | Secure mail connection |
+| `SMTP_USER` | `w.schmidt@workreferences.com` | Mailbox that sends the alerts |
+| `SMTP_PASS` | your Google app password, kept secret | Lets the app send from that mailbox. Entered in the Render dashboard |
+| `NOTIFY_EMAIL_TO` | `w.schmidt@workreferences.com` | Who receives the alerts (separate several with commas) |
+| `APP_URL` | `https://assessment.workreferences.com` | Used for the links inside the alerts |
 
 **Do not add:**
 
@@ -84,6 +90,24 @@ The free plan won't work because it has no persistent disk: every restart would 
 
 **Optional, after it's verified:** in `render.yaml`, change `renderSubdomainPolicy: enabled` to `disabled` and push. The app will then only work at assessment.workreferences.com, and the onrender.com address will return "not found". Don't do this before the domain is verified, or the app will be unreachable.
 
+## Step 3b. Turn on email alerts
+
+Every completed assessment emails you the client's contact details, score, result, top areas to prepare and all six answers. Reply to the alert to write to the client directly. A second alert arrives when they upload a resume (download the file from `/#/admin`; it isn't attached).
+
+Google needs a special **app password** for this, not your normal password:
+
+1. Sign in to https://myaccount.google.com as `w.schmidt@workreferences.com`.
+2. Click **Security**. Under "How you sign in to Google", make sure **2-Step Verification** is on. Turn it on if not; app passwords need it.
+3. Go to https://myaccount.google.com/apppasswords (or type "App passwords" in the search box at the top).
+4. Type the name `WorkReferences Assessment` and click **Create**.
+5. Google shows a 16-character password in a yellow box, only once. Copy it.
+6. In Render, open **workreferences-assessment**, then **Environment**. Check that all six email settings are listed: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `NOTIFY_EMAIL_TO` and `APP_URL`, with the values in the table above. Add any that are missing with **Add Environment Variable**. Paste the app password as the value of `SMTP_PASS`, then click **Save, rebuild, and deploy**.
+7. Complete a test assessment. The alert should arrive within a minute. The first one may land in Spam; mark it "Not spam".
+
+If you don't see "App passwords": the Google Workspace admin console may be blocking it. In https://admin.google.com go to **Security > Authentication > 2-Step Verification** and check **Allow users to turn on 2-Step Verification**.
+
+If no alert arrives, open the service's **Logs** in Render and look for a line starting with `email alert failed`. It gives the reason without showing any client details. The client's submission is always saved either way.
+
 ## Step 4. Add the research chart to workreferences.com/insights/research
 
 Paste this into an HTML or embed block on the Readdy page:
@@ -103,7 +127,8 @@ If Readdy doesn't allow scripts, use the `<iframe>` line alone. It works, just w
 - [ ] `https://assessment.workreferences.com/api/health` shows `{"ok":true}`, with a padlock in the browser
 - [ ] On workreferences.com, every "Start My Free Assessment" button opens `https://assessment.workreferences.com`
 - [ ] Complete one real assessment. The results page loads, and the booking button opens vCita with your details filled in.
-- [ ] Upload a test resume, then open `/#/admin` with the new passcode and download it.
+- [ ] The alert email for that test arrives at w.schmidt@workreferences.com.
+- [ ] Upload a test resume, then open `/#/admin` with the new passcode and download it. A "Resume uploaded" alert arrives.
 - [ ] Redeploy once (**Manual Deploy > Deploy latest commit**) and confirm the test submission is still in `/#/admin`. This proves the disk is working.
 - [ ] Delete your test submission afterwards, or leave it: research data only counts after 25 assessments.
 - [ ] In vCita: make the 3 extra booking questions optional, and fix the Terms of Service link (currently `workreferences.co/terms-of-service/`).

@@ -33,4 +33,17 @@ services:
         value: https://live.vcita.com/site/27x9gds0opl46jcy/online-scheduling?service=48a5dda49xy1aaj3
       - key: RESEARCH_MIN_RESPONSES
         value: "25"
+      # Email alerts for completed assessments and resume uploads (Google Workspace).
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        value: w.schmidt@workreferences.com
+      - key: SMTP_PASS
+        sync: false # Google app password, entered in the Render dashboard
+      - key: NOTIFY_EMAIL_TO
+        value: w.schmidt@workreferences.com
+      - key: APP_URL
+        value: https://assessment.workreferences.com
       # Do NOT add RESEARCH_SAMPLE here. It is for the preview only.

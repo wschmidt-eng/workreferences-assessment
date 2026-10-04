@@ -9,6 +9,7 @@ import path from "node:path";
 import { storage, riskStorage, researchStorage, funnelStorage, coachingStorage, DATA_DIR } from "./storage";
 import { computeResult, RISK_AREAS, OTHER_ID, selectedIds, JOB_SEARCH_STATUSES, RESULT_COPY } from "@shared/riskAreas";
 import type { RiskAssessment } from "@shared/schema";
+import { notifyCompleted, notifyResume } from "./notify";
 import { patchAssessmentSchema } from "@shared/schema";
 
 export async function registerRoutes(
@@ -210,6 +211,8 @@ export async function registerRoutes(
       try { researchStorage.add(research); } catch (e) { console.error("research insert failed", e); }
     }
     res.json(publicView(updated));
+    // First completion only: email the team (never blocks or fails the submission).
+    if (research) notifyCompleted(updated);
   });
 
   app.post("/api/risk-assessments/:id/resume", (req, res) => {
@@ -229,6 +232,7 @@ export async function registerRoutes(
     writeFileSync(path.join(UPLOAD_DIR, stored), buf);
     const updated = riskStorage.patch(rec.id, { resumeFileName: fileName, resumeStoredName: stored })!;
     res.json(publicView(updated));
+    notifyResume(updated);
   });
 
   app.delete("/api/risk-assessments/:id/resume", (req, res) => {
