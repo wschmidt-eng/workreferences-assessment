@@ -9,7 +9,7 @@ A 6-question, about 5-minute assessment that shows job seekers what an employer 
 
 | Path | What it is |
 |---|---|
-| `/#/` | The assessment (intro, 6 questions, optional positions, contact details) |
+| `/#/` | The assessment: question 1 on the opening screen, 6 questions, then contact details. `/#/?start=1` hides the welcome headline |
 | `/#/free-assessment/:id/results` | Results page: preparation plan, score, research chart, booking and optional resume upload |
 | `/#/admin` | Consultant view: submissions, resume downloads, funnel, research chart, delete controls. Needs `ADMIN_PASSCODE` |
 | `/#/embed/research` | Research chart for embedding on workreferences.com/insights/research |
@@ -109,7 +109,7 @@ Don't add `RESEARCH_SAMPLE`, `PORT` or `NODE_ENV` in Render. Setting `NODE_ENV` 
 
 ### Email alerts
 
-When a client completes the assessment, the app emails `NOTIFY_EMAIL_TO` with their contact details, score, result, top areas to prepare, all six answers and positions. Replying to the alert writes to the client directly. A second, shorter alert is sent when they upload a resume. The file itself isn't attached; download it from `/#/admin`.
+When a client completes the assessment, the app emails `NOTIFY_EMAIL_TO` with their contact details, score, result, top areas to prepare and all six answers. Employers, job titles and dates are not collected. Replying to the alert writes to the client directly. A second, shorter alert is sent when they upload a resume. The file itself isn't attached; download it from `/#/admin`.
 
 To create the Google app password for `w.schmidt@workreferences.com`:
 
@@ -125,7 +125,7 @@ Render's paid instances can send email. Free instances can't use mail ports 25, 
 
 ### 4. Link it from workreferences.com
 
-- Point every "Start My Free Assessment" button to `https://assessment.workreferences.com`.
+- Point every "Start My Free Assessment" button to `https://assessment.workreferences.com/#/?start=1&src=website`. This opens straight on question 1 and labels the visit as coming from your website in the admin funnel.
 - To show the research chart on https://workreferences.com/insights/research, paste this into an HTML/embed block:
 
 ```html
@@ -139,7 +139,7 @@ window.addEventListener("message",function(e){if(e.data&&e.data.type==="wr-resea
 ### 5. Launch checklist
 
 - [ ] `https://assessment.workreferences.com/api/health` shows `{"ok":true}`, with a padlock in the browser
-- [ ] Every "Start My Free Assessment" button on workreferences.com opens the new address
+- [ ] Every "Start My Free Assessment" button on workreferences.com opens `https://assessment.workreferences.com/#/?start=1&src=website`
 - [ ] Complete one assessment. The results page loads, and the booking button opens vCita with your details filled in
 - [ ] An alert email for that test arrives at w.schmidt@workreferences.com (check Spam the first time and mark it "Not spam")
 - [ ] Upload a test resume, then download it from `/#/admin` using the new passcode. A "Resume uploaded" alert arrives
@@ -157,5 +157,5 @@ window.addEventListener("message",function(e){if(e.data&&e.data.type==="wr-resea
 
 - Contact details are collected only at the final step. Answers saved for resuming stay on the visitor's own device, with no contact details, and are cleared on completion.
 - Research data is anonymous: month, job-search status, result category and answer choices only.
-- Funnel tracking uses a random in-memory visit id, with no names, contact details or links to submissions.
+- Funnel tracking uses a random visitor id that changes daily (kept in the browser), with no names, contact details or links to submissions. Automated browsers and any browser that has logged in to `/#/admin` are not counted. "Started" means the visitor answered question 1. Traffic source is stored only as a broad category (workreferences.com, search, social, email, direct, other). Counts start on Oct 7, 2026, when the counting method changed.
 - Admin requests authenticate with the `x-admin-key` header only, with a 15-minute lockout after 10 failed attempts.

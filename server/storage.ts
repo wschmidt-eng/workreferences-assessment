@@ -159,6 +159,11 @@ export const researchStorage = {
 
 export const funnelStorage = {
   add(visitId: string, step: string) {
+    // One traffic source per visitor: keep the first one recorded.
+    if (step.startsWith("src_")) {
+      const has = sqlite.prepare("SELECT 1 FROM funnel_events WHERE visit_id = ? AND step LIKE 'src_%' LIMIT 1").get(visitId);
+      if (has) return;
+    }
     sqlite
       .prepare("INSERT OR IGNORE INTO funnel_events (visit_id, step, day) VALUES (?, ?, ?)")
       .run(visitId, step, new Date().toISOString().slice(0, 10));
@@ -166,6 +171,17 @@ export const funnelStorage = {
   counts(sinceDay: string): Record<string, number> {
     const rows = sqlite
       .prepare("SELECT step, COUNT(*) AS n FROM funnel_events WHERE day >= ? GROUP BY step")
+      .all(sinceDay) as { step: string; n: number }[];
+    return Object.fromEntries(rows.map((r) => [r.step, r.n]));
+  },
+  /** Per traffic source: how many of those visits went on to start (answer question 1). */
+  sourceStarts(sinceDay: string): Record<string, number> {
+    const rows = sqlite
+      .prepare(
+        `SELECT s.step AS step, COUNT(*) AS n FROM funnel_events s
+         JOIN funnel_events t ON t.visit_id = s.visit_id AND t.step = 'start'
+         WHERE s.step LIKE 'src_%' AND s.day >= ? GROUP BY s.step`
+      )
       .all(sinceDay) as { step: string; n: number }[];
     return Object.fromEntries(rows.map((r) => [r.step, r.n]));
   },

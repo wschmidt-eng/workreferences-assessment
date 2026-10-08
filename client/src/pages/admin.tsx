@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest, API_BASE } from "@/lib/queryClient";
+import { markAdminBrowser } from "@/lib/track";
 import { computeResult, RESULT_COPY, RISK_AREAS, type AreaAnswers, type Position } from "@shared/riskAreas";
 import { FlagChip } from "@/pages/free-assessment";
 import { cn } from "@/lib/utils";
@@ -100,6 +101,7 @@ export default function Admin() {
     try {
       const res = await apiRequest("GET", `/api/admin/risk-assessments`, undefined, { "x-admin-key": key });
       setRows(await res.json());
+      markAdminBrowser();
       loadCoachingCount();
     } catch {
       setError("That passcode didn't work.");

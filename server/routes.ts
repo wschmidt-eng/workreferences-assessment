@@ -98,15 +98,8 @@ export async function registerRoutes(
 
   const sanitizeData = (raw: any) => {
     const out: any = { positions: [], answers: {} };
-    if (Array.isArray(raw?.positions)) {
-      out.positions = raw.positions.slice(0, 3).map((p: any) => ({
-        employer: str(p?.employer, 120),
-        title: str(p?.title, 120),
-        start: str(p?.start, 20),
-        end: str(p?.end, 20),
-        current: !!p?.current,
-      }));
-    }
+    // Positions (employers, titles, dates) are no longer collected: a consultant only
+    // needs to know where differences exist, not the details themselves.
     for (const area of RISK_AREAS) {
       const a = raw?.answers?.[area.key];
       if (!a) continue;
@@ -290,7 +283,7 @@ export async function registerRoutes(
       multi: !!a.multi,
       options: a.options
         .map((o) => {
-          const count = parsed.filter((p) => (p[a.key] || []).includes(o.id)).length;
+          const count = parsed.filter((p) => selectedIds({ optionIds: p[a.key] || [], other: "" }).includes(o.id)).length;
           return { id: o.id, label: o.label, count, pct: pct(count) };
         })
         .sort((x, y) => y.count - x.count),
@@ -307,34 +300,46 @@ export async function registerRoutes(
   });
 
   // ---- Anonymous funnel events (no personal data; random per-visit id) ----
+  // Funnel counting changed on Oct 7, 2026: "open" replaced "intro", and the
+  // first step is now "start" (picked an answer to question 1). Earlier rows
+  // are ignored so old and new definitions never mix.
+  const FUNNEL_SINCE = "2026-10-07";
   const FUNNEL_STEPS = [
-    "intro",
-    "q1", "q2", "q3", "q4", "q5", "q6",
-    "positions",
+    "open",
+    "start", "q2", "q3", "q4", "q5", "q6",
     "contact",
     "results",
     "booking_click",
     "resume_upload",
   ] as const;
   const FUNNEL_LABELS: Record<string, string> = {
-    intro: "Viewed intro",
-    q1: "Question 1 · Employment dates",
-    q2: "Question 2 · Job titles",
-    q3: "Question 3 · Employment arrangement",
-    q4: "Question 4 · References",
-    q5: "Question 5 · Departures and gaps",
-    q6: "Question 6 · Consistency",
-    positions: "Positions",
+    open: "Opened the assessment",
+    start: "Started · answered question 1 (Employment arrangement)",
+    q2: "Question 2 · References",
+    q3: "Question 3 · Records and profiles",
+    q4: "Question 4 · Employment dates",
+    q5: "Question 5 · Job titles",
+    q6: "Question 6 · Departures and gaps",
     contact: "Contact details",
     results: "Saw results",
     booking_click: "Clicked booking",
     resume_upload: "Uploaded resume",
   };
+  const SOURCES = ["website", "search", "social", "email", "direct", "other"] as const;
+  const SOURCE_LABELS: Record<string, string> = {
+    website: "workreferences.com",
+    search: "Search engines",
+    social: "Social media",
+    email: "Email",
+    direct: "Direct or unknown",
+    other: "Other websites",
+  };
+  const EVENT_KEYS = new Set<string>([...FUNNEL_STEPS, ...SOURCES.map((x) => `src_${x}`)]);
 
   app.post("/api/events", (req, res) => {
     const v = typeof req.body?.v === "string" ? req.body.v : "";
     const step = typeof req.body?.s === "string" ? req.body.s : "";
-    if (/^[a-z0-9-]{8,64}$/i.test(v) && (FUNNEL_STEPS as readonly string[]).includes(step)) {
+    if (/^[a-z0-9-]{8,64}$/i.test(v) && EVENT_KEYS.has(step)) {
       try { funnelStorage.add(v, step); } catch {}
     }
     res.status(204).end();
@@ -362,9 +367,10 @@ export async function registerRoutes(
   app.get("/api/admin/funnel", (req, res) => {
     if (!adminOk(req)) return res.status(401).json({ message: "Invalid passcode" });
     const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
-    const since = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+    const rangeStart = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+    const since = rangeStart < FUNNEL_SINCE ? FUNNEL_SINCE : rangeStart;
     const c = funnelStorage.counts(since);
-    const start = c.intro || 0;
+    const start = c.open || 0;
     let prev = start;
     const steps = FUNNEL_STEPS.map((k) => {
       const n = c[k] || 0;
@@ -378,7 +384,13 @@ export async function registerRoutes(
       if (k !== "booking_click" && k !== "resume_upload") prev = n;
       return row;
     });
-    res.json({ days, steps });
+    const ss = funnelStorage.sourceStarts(since);
+    const sources = SOURCES.map((k) => {
+      const n = c[`src_${k}`] || 0;
+      const started = ss[`src_${k}`] || 0;
+      return { key: k, label: SOURCE_LABELS[k], visits: n, started, startRate: n ? Math.round((started / n) * 1000) / 10 : 0 };
+    });
+    res.json({ days, since, countingChanged: FUNNEL_SINCE, steps, sources });
   });
 
   app.get("/api/admin/risk-assessments", (req, res) => {

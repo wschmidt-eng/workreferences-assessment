@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import founderPhoto from "@/assets/william-schmidt.jpg";
-import { track } from "@/lib/track";
+import { track, trafficSource } from "@/lib/track";
 import { useLocation, Link } from "wouter";
 import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -112,8 +112,6 @@ export function FlagChip({ flag, score }: { flag: Flag; score?: number }) {
   );
 }
 
-const emptyPosition = (): Position => ({ employer: "", title: "", start: "", end: "", current: false });
-
 export function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -129,15 +127,27 @@ export function readFileAsBase64(file: File): Promise<string> {
 const PROGRESS_KEY = "wr-assessment-progress";
 const URGENT_STATUS = "Received an offer, background check pending";
 
-// Steps: 0 intro, 1–6 questions, 7 positions, 8 contact ("your plan is ready")
+// Steps: 1–6 questions (question 1 is the opening screen), 7 contact ("your plan is ready").
+// Positions (employers, titles, dates) are no longer collected.
 const Q_START = 1;
-const POSITIONS_STEP = Q_START + RISK_AREAS.length; // 7
-const CONTACT_STEP = POSITIONS_STEP + 1; // 8
+const CONTACT_STEP = Q_START + RISK_AREAS.length; // 7
+
+/** Links such as #/?start=1 skip the welcome headline and open straight on question 1. */
+function directStart(): boolean {
+  try {
+    const h = window.location.hash;
+    if (!h.includes("?")) return false;
+    const q = new URLSearchParams(h.split("?")[1]);
+    return q.get("start") === "1";
+  } catch {
+    return false;
+  }
+}
 
 interface SavedProgress {
   step: number;
   answers: AreaAnswers;
-  positions: Position[];
+  positions?: unknown;
   jobSearchStatus: string;
   targetRole: string;
   savedAt: number;
@@ -157,10 +167,11 @@ function loadProgress(): SavedProgress | null {
   }
 }
 
-function stepEvent(step: number): string {
-  if (step === 0) return "intro";
-  if (step >= Q_START && step < POSITIONS_STEP) return `q${step - Q_START + 1}`;
-  if (step === POSITIONS_STEP) return "positions";
+// Question 1 is counted as "start" when the visitor picks an answer (not when it
+// appears), so the funnel shows whether people actually begin.
+function stepEvent(step: number): string | null {
+  if (step <= Q_START) return null;
+  if (step < CONTACT_STEP) return `q${step - Q_START + 1}`;
   return "contact";
 }
 
@@ -168,7 +179,11 @@ export default function FreeAssessment() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [saved] = useState<SavedProgress | null>(() => loadProgress());
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(Q_START);
+  const [compact] = useState(() => directStart());
+  // The welcome headline, trust content and saved-progress banner sit around
+  // question 1 until the visitor moves on.
+  const [opening, setOpening] = useState(true);
   const [busy, setBusy] = useState(false);
   const [returnToContact, setReturnToContact] = useState(false);
 
@@ -180,42 +195,59 @@ export default function FreeAssessment() {
   const [targetRole, setTargetRole] = useState("");
   const [consent, setConsent] = useState(false);
 
-  const [positions, setPositions] = useState<Position[]>([emptyPosition()]);
   const [answers, setAnswers] = useState<AreaAnswers>({});
 
   const areaIndex = step - Q_START;
   const area = areaIndex >= 0 && areaIndex < RISK_AREAS.length ? RISK_AREAS[areaIndex] : null;
   const urgent = jobSearchStatus === URGENT_STATUS;
-  const minutesLeft = Math.max(1, Math.round((CONTACT_STEP + 1 - step) * 0.6));
+  const minutesLeft = Math.max(1, Math.round((CONTACT_STEP + 1 - step) * 0.7));
+  const onOpening = opening && step === Q_START;
 
   useEffect(() => {
-    track(stepEvent(step));
+    track("open");
+    track(`src_${trafficSource()}`);
+  }, []);
+
+  useEffect(() => {
+    const ev = stepEvent(step);
+    if (ev) track(ev);
+    if (step !== Q_START) setOpening(false);
   }, [step]);
+
+  useEffect(() => {
+    if (answers[RISK_AREAS[0].key]?.optionIds?.length) track("start");
+  }, [answers]);
 
   // Save progress on this device (answers only, never contact details).
   useEffect(() => {
-    if (step === 0 && !Object.keys(answers).length) return;
+    if (!Object.keys(answers).length) return;
     try {
-      const p: SavedProgress = { step, answers, positions, jobSearchStatus, targetRole, savedAt: Date.now() };
+      const p: SavedProgress = { step, answers, jobSearchStatus, targetRole, savedAt: Date.now() };
       localStorage.setItem(PROGRESS_KEY, JSON.stringify(p));
     } catch {}
-  }, [step, answers, positions, jobSearchStatus, targetRole]);
+  }, [step, answers, jobSearchStatus, targetRole]);
 
   function resumeSaved() {
     if (!saved) return;
     setAnswers(saved.answers || {});
-    setPositions(saved.positions?.length ? saved.positions : [emptyPosition()]);
     setJobSearchStatus(saved.jobSearchStatus || "");
     setTargetRole(saved.targetRole || "");
-    setStep(Math.min(Math.max(saved.step, Q_START), CONTACT_STEP));
+    const to = Math.min(Math.max(saved.step, Q_START), CONTACT_STEP);
+    // A returning visitor has already started; count the steps they skip past.
+    track("start");
+    for (let st = Q_START + 1; st <= to; st++) {
+      const ev = stepEvent(st);
+      if (ev) track(ev);
+    }
+    setStep(to);
     window.scrollTo({ top: 0 });
   }
 
   function startOver() {
     try { localStorage.removeItem(PROGRESS_KEY); } catch {}
     setAnswers({});
-    setPositions([emptyPosition()]);
     setStep(Q_START);
+    setOpening(false);
     window.scrollTo({ top: 0 });
   }
 
@@ -255,7 +287,6 @@ export default function FreeAssessment() {
     }
     setBusy(true);
     try {
-      const cleanPositions = positions.filter((p) => p.employer.trim() || p.title.trim());
       const res = await apiRequest("POST", "/api/risk-assessments", {
         firstName,
         lastName,
@@ -264,10 +295,10 @@ export default function FreeAssessment() {
         jobSearchStatus,
         targetRole,
         consent,
-        data: { positions: cleanPositions, answers },
+        data: { answers },
       });
       const json = await res.json();
-      await apiRequest("PATCH", `/api/risk-assessments/${json.id}`, { data: { positions: cleanPositions, answers }, complete: true });
+      await apiRequest("PATCH", `/api/risk-assessments/${json.id}`, { data: { answers }, complete: true });
       try { localStorage.removeItem(PROGRESS_KEY); } catch {}
       setLocation(`/free-assessment/${json.id}/results`);
     } catch (e: any) {
@@ -279,22 +310,13 @@ export default function FreeAssessment() {
 
   function handleBack() {
     setReturnToContact(false);
-    go(Math.max(0, step - 1));
+    go(Math.max(Q_START, step - 1));
   }
 
-  const positionsFilled = positions.some((p) => p.employer.trim() || p.title.trim());
   const continueLabel =
-    step === 0
-      ? "Start my free assessment"
-      : step === POSITIONS_STEP && !positionsFilled
-        ? "Skip this step"
-        : step === CONTACT_STEP
-          ? "See my plan"
-          : returnToContact && area
-            ? "Save and return"
-            : "Continue";
+    step === CONTACT_STEP ? "See my plan" : returnToContact && area ? "Save and return" : onOpening ? "Next question" : "Continue";
 
-  const stepLabel = area ? `Question ${area.number} of 6` : step === POSITIONS_STEP ? "Almost done" : "Last step";
+  const stepLabel = area ? `Question ${area.number} of 6` : "Last step";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -307,7 +329,7 @@ export default function FreeAssessment() {
             <Lock className="h-3.5 w-3.5 shrink-0" /> <span className="sm:hidden">Free · Private</span><span className="hidden sm:inline">Free · Private · No obligation</span>
           </span>
         </div>
-        {step > 0 && (
+        {!(onOpening && !compact) && (
           <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 pb-3">
             <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
               <span data-testid="text-step">{stepLabel}</span>
@@ -319,17 +341,16 @@ export default function FreeAssessment() {
       </header>
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-10">
-        {step === 0 && (
-          <IntroStep
-            saved={saved}
+        {onOpening && (
+          <IntroHero
+            saved={Object.keys(answers).length ? null : saved}
             onResume={resumeSaved}
             onStartOver={startOver}
-            status={jobSearchStatus}
-            onStatus={setJobSearchStatus}
+            compact={compact}
           />
         )}
 
-        {area && urgent && (
+        {area && urgent && !onOpening && (
           <div className="mb-6 flex items-start gap-2.5 rounded-md border border-primary/25 bg-primary/5 p-3.5" data-testid="banner-urgent">
             <Clock className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <p className="text-sm text-foreground leading-relaxed">
@@ -342,89 +363,14 @@ export default function FreeAssessment() {
         {area && (
           <AreaStep
             key={area.key}
+            opening={onOpening}
             areaIndex={areaIndex}
             answer={answers[area.key]}
             onChange={(patch) => updateAnswer(area.key, patch)}
           />
         )}
 
-        {step === POSITIONS_STEP && (
-          <section className="space-y-6">
-            <StepHeading
-              eyebrow="Optional"
-              title="Which job is most likely to be checked?"
-              lead="Usually your most recent role. This stays between you and your consultant. It's just so your plan can refer to the right job. You can skip it."
-            />
-            <div className="space-y-4">
-              {positions.map((p, i) => (
-                <div key={i} className="rounded-lg border border-border p-4 space-y-3" data-testid={`card-position-${i}`}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground">Position {i + 1}</p>
-                    {positions.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPositions((ps) => ps.filter((_, j) => j !== i))}
-                        aria-label={`Remove position ${i + 1}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <Field label="Employer (a nickname or initials is fine)" htmlFor={`emp-${i}`}>
-                      <Input
-                        id={`emp-${i}`}
-                        value={p.employer}
-                        onChange={(e) => setPositions((ps) => ps.map((x, j) => (j === i ? { ...x, employer: e.target.value } : x)))}
-                        data-testid={`input-employer-${i}`}
-                      />
-                    </Field>
-                    <Field label="Title on your resume" htmlFor={`ttl-${i}`}>
-                      <Input
-                        id={`ttl-${i}`}
-                        value={p.title}
-                        onChange={(e) => setPositions((ps) => ps.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-                        data-testid={`input-title-${i}`}
-                      />
-                    </Field>
-                    <Field label="Start (month and year)" htmlFor={`st-${i}`}>
-                      <Input
-                        id={`st-${i}`}
-                        type="month"
-                        value={p.start}
-                        onChange={(e) => setPositions((ps) => ps.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))}
-                      />
-                    </Field>
-                    <Field label="End (month and year)" htmlFor={`en-${i}`}>
-                      <Input
-                        id={`en-${i}`}
-                        type="month"
-                        value={p.end}
-                        disabled={p.current}
-                        onChange={(e) => setPositions((ps) => ps.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))}
-                      />
-                    </Field>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-                    <Checkbox
-                      checked={p.current}
-                      onCheckedChange={(v) =>
-                        setPositions((ps) => ps.map((x, j) => (j === i ? { ...x, current: v === true, end: v === true ? "" : x.end } : x)))
-                      }
-                    />
-                    I currently work here
-                  </label>
-                </div>
-              ))}
-            </div>
-            {positions.length < 3 && (
-              <Button variant="ghost" size="sm" onClick={() => setPositions((ps) => [...ps, emptyPosition()])} data-testid="button-add-position">
-                <Plus className="h-4 w-4" /> Add another position (optional)
-              </Button>
-            )}
-          </section>
-        )}
+        {onOpening && <IntroExtras status={jobSearchStatus} onStatus={setJobSearchStatus} />}
 
         {step === CONTACT_STEP && (
           <section className="space-y-6">
@@ -532,7 +478,7 @@ export default function FreeAssessment() {
 
       <footer className="border-t border-border bg-background sticky bottom-0">
         <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-3 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
-          {step > 0 ? (
+          {step > Q_START ? (
             <Button variant="outline" onClick={handleBack} disabled={busy} className="w-full sm:w-auto" data-testid="button-back">
               <ChevronLeft className="h-4 w-4" /> Back
             </Button>
@@ -540,13 +486,13 @@ export default function FreeAssessment() {
             <span className="hidden sm:block text-xs text-muted-foreground">About 5 minutes · 6 multiple-choice questions</span>
           )}
           <Button
-            onClick={step === 0 && saved ? startOver : handleContinue}
+            onClick={handleContinue}
             disabled={!canContinue || busy}
             className="w-full sm:w-auto h-auto min-h-10 whitespace-normal text-center leading-snug py-2.5"
             data-testid="button-continue"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
-            {step === 0 && saved ? "Start a new assessment" : continueLabel}
+            {continueLabel}
             {!busy && <ChevronRight className="h-4 w-4 shrink-0" />}
           </Button>
         </div>
@@ -555,11 +501,12 @@ export default function FreeAssessment() {
   );
 }
 
-function StepHeading({ eyebrow, title, lead }: { eyebrow: string; title: string; lead?: string }) {
+function StepHeading({ eyebrow, title, lead, level = 1 }: { eyebrow: string; title: string; lead?: string; level?: 1 | 2 }) {
+  const H = level === 1 ? "h1" : "h2";
   return (
     <div>
       <p className="text-xs font-medium text-primary uppercase tracking-wide mb-2">{eyebrow}</p>
-      <h1 className="text-xl font-display font-semibold text-foreground leading-snug">{title}</h1>
+      <H className="text-xl font-display font-semibold text-foreground leading-snug">{title}</H>
       {lead && <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-prose">{lead}</p>}
     </div>
   );
@@ -655,19 +602,61 @@ function PrivacyPanel() {
   );
 }
 
-function IntroStep({
+function IntroHero({
   saved,
   onResume,
   onStartOver,
-  status,
-  onStatus,
+  compact,
 }: {
   saved: SavedProgress | null;
   onResume: () => void;
   onStartOver: () => void;
-  status: string;
-  onStatus: (s: string) => void;
+  compact: boolean;
 }) {
+  const savedQuestion = saved ? Math.min(6, Math.max(1, saved.step)) : 1;
+  return (
+    <div className="mb-8 space-y-6">
+      {saved && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4" data-testid="banner-resume">
+          <p className="flex-1 text-sm text-foreground">
+            <span className="font-medium">Welcome back.</span>{" "}
+            {saved.step >= CONTACT_STEP ? "You've answered all 6 questions." : `Pick up at question ${savedQuestion}?`} Your answers
+            were saved on this device.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button onClick={onResume} data-testid="button-resume">
+              Continue where I left off
+            </Button>
+            <Button variant="ghost" onClick={onStartOver} data-testid="button-start-over">
+              Start over
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!compact && (
+        <div className="max-w-2xl" data-testid="intro-hero">
+          <p className="text-xs font-medium text-primary uppercase tracking-wide mb-2">Free Reference Risk Assessment</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-semibold text-foreground leading-tight">
+            Find out what an employer is likely to verify, before they call
+          </h1>
+          <p className="mt-3 text-sm sm:text-base text-muted-foreground leading-relaxed">
+            6 multiple-choice questions, about 5 minutes. No resume needed. You never enter employers, dates or job titles.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground" data-testid="trust-row">
+            {["Private", "Never shared with employers", "No credit card", "No obligation"].map((t) => (
+              <li key={t} className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-primary" /> {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntroExtras({ status, onStatus }: { status: string; onStatus: (s: string) => void }) {
   const cards = [
     {
       icon: FileSearch,
@@ -685,42 +674,8 @@ function IntroStep({
       body: "Small, explainable differences are common. Knowing where they are gives you time to prepare a truthful explanation before anyone asks.",
     },
   ];
-  const savedQuestion = saved ? Math.min(6, Math.max(1, saved.step)) : 1;
   return (
-    <section className="space-y-8">
-      {saved && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4" data-testid="banner-resume">
-          <p className="flex-1 text-sm text-foreground">
-            <span className="font-medium">Welcome back.</span>{" "}
-            {saved.step >= POSITIONS_STEP ? "You've answered all 6 questions." : `Pick up at question ${savedQuestion}?`} Your answers
-            were saved on this device.
-          </p>
-          <Button onClick={onResume} data-testid="button-resume">
-            Continue where I left off
-          </Button>
-        </div>
-      )}
-
-      <div className="text-center max-w-2xl mx-auto">
-        <p className="text-xs font-medium text-primary uppercase tracking-wide mb-3">Free Reference Risk Assessment</p>
-        <h1 className="text-2xl sm:text-3xl font-display font-semibold text-foreground leading-tight">
-          Find out what an employer is likely to verify, before they call
-        </h1>
-        <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
-          Answer 6 multiple-choice questions and get a private plan showing what to prepare. About 5 minutes. No resume needed.
-        </p>
-        <p className="mt-4 text-sm text-foreground font-medium">
-          Most people who take this have at least one thing to prepare for. That's exactly what it's for.
-        </p>
-        <ul className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground" data-testid="trust-row">
-          {["Private", "Never shared with employers", "No credit card", "No obligation"].map((t) => (
-            <li key={t} className="flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5 text-primary" /> {t}
-            </li>
-          ))}
-        </ul>
-      </div>
-
+    <section className="mt-10 space-y-6 border-t border-border pt-8" data-testid="intro-extras">
       <div className="rounded-lg border border-border p-4 sm:p-5" data-testid="status-picker">
         <p className="text-sm font-medium text-foreground">Where are you in your job search? <span className="font-normal text-muted-foreground">(optional)</span></p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -776,7 +731,9 @@ function AreaStep({
   areaIndex,
   answer,
   onChange,
+  opening = false,
 }: {
+  opening?: boolean;
   areaIndex: number;
   answer?: AreaAnswer;
   onChange: (patch: Partial<AreaAnswer>) => void;
@@ -803,11 +760,12 @@ function AreaStep({
   }
 
   return (
-    <section className="space-y-6">
+    <section className={cn("space-y-6", opening && "rounded-xl border border-border p-4 sm:p-6")} data-testid={`area-${area.key}`}>
       <StepHeading
-        eyebrow={`Risk area ${area.number} of 6 · ${area.title}`}
+        eyebrow={`Question ${area.number} of 6 · ${area.title}`}
         title={area.question.replace(/ Select all that apply\.$/, "")}
         lead={area.multi ? "Select all that apply." : undefined}
+        level={opening ? 2 : 1}
       />
 
       {area.number === 1 && (
@@ -816,6 +774,7 @@ function AreaStep({
         </p>
       )}
 
+      {!opening && (
       <p className="flex items-start gap-2 text-sm text-muted-foreground leading-relaxed" data-testid={`reassurance-${area.key}`}>
         <Lock className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <span>
@@ -823,7 +782,9 @@ function AreaStep({
           are the only way we can help you prepare.
         </span>
       </p>
+      )}
 
+      {!opening && (
       <div className="flex gap-3 rounded-md bg-muted/60 p-3.5">
         <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <p className="text-sm text-muted-foreground leading-relaxed">
@@ -831,6 +792,7 @@ function AreaStep({
           {area.whatHrChecks}
         </p>
       </div>
+      )}
 
       <div role={area.multi ? "group" : "radiogroup"} aria-label={area.question} className="space-y-2">
         {area.options.map((o) => {

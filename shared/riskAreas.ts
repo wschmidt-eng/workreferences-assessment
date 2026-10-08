@@ -53,63 +53,10 @@ const OTHER_OPTION: AreaOption = { id: OTHER_ID, label: "Other", score: OTHER_SC
 
 export const RISK_AREAS: RiskArea[] = [
   {
-    key: "dates",
-    number: 1,
-    title: "Employment dates",
-    question: "How closely do the dates on your resume match what an employer's HR records would show?",
-    whatHrChecks:
-      "Verification services such as HireRight and The Work Number confirm start and end dates directly with the employer's HR or payroll records.",
-    weight: 20,
-    category: "employment",
-    options: [
-      { id: "match", label: "They match what HR would verify", score: 1 },
-      { id: "le90", label: "Off by 90 days or less", hint: "For example, rounded to the month or year", score: 4 },
-      { id: "overlap", label: "Two jobs overlap on my resume", score: 5 },
-      { id: "3to6", label: "Off by 3 to 6 months", score: 6 },
-      { id: "6to12", label: "Off by 6 to 12 months", score: 8 },
-      { id: "gt12", label: "Off by more than 12 months", score: 10 },
-      { id: "gapcover", label: "Dates were extended to cover a gap", score: 10 },
-      { id: "records", label: "My employer's records may be missing or wrong", hint: "For example, after a closure, merger or payroll change", score: 5 },
-      { id: "unsure", label: "I'm not sure what my employer has on record", score: 5 },
-    ],
-    prepare: {
-      green: "Keep your dates exactly as they are and use the same dates on every application.",
-      yellow:
-        "Small differences are common, but align your resume to the dates HR will confirm, and be ready to explain any rounding in one sentence.",
-      red: "Update the resume to the verifiable dates before your next background check. A consultant can help you present any gap honestly and confidently.",
-    },
-  },
-  {
-    key: "titles",
-    number: 2,
-    title: "Job titles",
-    question: "How does the job title on your resume compare to the title in your employer's records?",
-    whatHrChecks:
-      "Employment verifications usually return the official title in the HR system, which can differ from the title you used day to day.",
-    weight: 20,
-    category: "resume",
-    options: [
-      { id: "match", label: "Matches employer records exactly", score: 1 },
-      { id: "wording", label: "Different wording, same level and duties", hint: "For example, \"Operations Manager\" vs. \"Operations Supervisor II\"", score: 3 },
-      { id: "functional", label: "I used a clearer market title because the internal title was unusual", score: 4 },
-      { id: "reorg", label: "My title changed after a reorganization or merger", score: 4 },
-      { id: "acting", label: "Reflects a promotion or acting role that was never updated in HR", score: 6 },
-      { id: "oneup", label: "One level higher than employer records", score: 8 },
-      { id: "different", label: "Significantly higher, or a different role than records show", score: 10 },
-      { id: "unsure", label: "I'm not sure what title is on record", score: 5 },
-    ],
-    prepare: {
-      green: "No action needed. Keep titles identical across your resume, LinkedIn and applications.",
-      yellow:
-        "Consider listing the official title with a clarifier, such as \"Operations Supervisor II (Operations Manager duties)\", and brief a reference who can confirm your scope.",
-      red: "Use the official title on record. A recruiter who finds a higher title during verification is likely to question the whole resume.",
-    },
-  },
-  {
     key: "arrangement",
-    number: 3,
+    number: 1,
     title: "Employment arrangement",
-    question: "How were you employed in the positions you listed?",
+    question: "How were you employed in your recent jobs?",
     whatHrChecks:
       "If you were a contractor, consultant, temp or staffing-agency placement, the client company often has no record of you. Verification may need to go through the agency instead.",
     weight: 15,
@@ -133,7 +80,7 @@ export const RISK_AREAS: RiskArea[] = [
   },
   {
     key: "references",
-    number: 4,
+    number: 2,
     title: "References",
     question: "Which of these describe the references you can provide? Select all that apply.",
     whatHrChecks:
@@ -160,8 +107,84 @@ export const RISK_AREAS: RiskArea[] = [
     },
   },
   {
-    key: "departure",
+    key: "consistency",
+    number: 3,
+    title: "Consistency across records and profiles",
+    question: "How consistent are your resume, LinkedIn profile and past job applications?",
+    whatHrChecks:
+      "Recruiters routinely compare your resume with LinkedIn and with earlier applications. Mismatched dates, titles or employers raise credibility questions even when each one has an explanation.",
+    weight: 15,
+    category: "online",
+    options: [
+      { id: "match", label: "Resume, LinkedIn and applications all match", score: 1 },
+      { id: "minor", label: "Minor wording differences only", score: 3 },
+      { id: "nolinkedin", label: "My LinkedIn is missing or out of date", score: 4 },
+      { id: "unsure", label: "I haven't compared them recently", score: 5 },
+      { id: "differ", label: "Dates or titles differ between my resume and LinkedIn", score: 7 },
+      { id: "oldapps", label: "An old application or background check shows different details", score: 7 },
+      { id: "versions", label: "I've sent different resume versions with different details", score: 8 },
+    ],
+    prepare: {
+      green: "No action needed. Re-check LinkedIn whenever you update your resume.",
+      yellow: "Update LinkedIn so dates, titles and employers match your resume word for word.",
+      red: "Pick one accurate version of your history and update LinkedIn and your resume to match it before applying again.",
+    },
+  },
+  {
+    key: "dates",
+    number: 4,
+    title: "Employment dates",
+    question: "Would the dates on your resume match what a former employer has on file?",
+    whatHrChecks:
+      "Employment verifications usually confirm start and end dates from the employer's HR or payroll records. Only the difference matters here, not the dates themselves.",
+    weight: 20,
+    category: "employment",
+    options: [
+      { id: "match", label: "Yes, they match", score: 1 },
+      { id: "le90", label: "Close. Rounded to the month or year", score: 4 },
+      { id: "3to6", label: "A few months different", score: 6 },
+      { id: "6to12", label: "Six months or more different", score: 9 },
+      { id: "overlap", label: "Two jobs overlap", score: 5 },
+      { id: "gapcover", label: "A gap between jobs isn't shown", score: 10 },
+      { id: "records", label: "Their records may be missing or wrong", hint: "For example, after a closure, merger or payroll change", score: 5 },
+      { id: "unsure", label: "Not sure", score: 5 },
+    ],
+    prepare: {
+      green: "Keep your dates exactly as they are and use the same dates on every application.",
+      yellow:
+        "Small differences are common, but align your resume to the dates HR will confirm, and be ready to explain any rounding in one sentence.",
+      red: "Update the resume to the verifiable dates before your next background check. A consultant can help you present any gap honestly and confidently.",
+    },
+  },
+  {
+    key: "titles",
     number: 5,
+    title: "Job titles",
+    question: "Would your job titles match what a former employer has on file?",
+    whatHrChecks:
+      "Employment verifications usually return the official title in the HR system, which can differ from the title you used day to day. Only the difference matters here, not the title itself.",
+    weight: 20,
+    category: "resume",
+    options: [
+      { id: "match", label: "Yes, they match", score: 1 },
+      { id: "wording", label: "Same job, different wording", hint: "For example, \"Operations Manager\" vs. \"Operations Supervisor II\"", score: 3 },
+      { id: "functional", label: "I used a clearer title for an unusual internal one", score: 4 },
+      { id: "reorg", label: "Title changed after a reorganization or merger", score: 4 },
+      { id: "acting", label: "A promotion or acting role HR never updated", score: 6 },
+      { id: "oneup", label: "One level above their records", score: 8 },
+      { id: "different", label: "A different or more senior role than their records", score: 10 },
+      { id: "unsure", label: "Not sure", score: 5 },
+    ],
+    prepare: {
+      green: "No action needed. Keep titles identical across your resume, LinkedIn and applications.",
+      yellow:
+        "Consider listing the official title with a clarifier, such as \"Operations Supervisor II (Operations Manager duties)\", and brief a reference who can confirm your scope.",
+      red: "Use the official title on record. A recruiter who finds a higher title during verification is likely to question the whole resume.",
+    },
+  },
+  {
+    key: "departure",
+    number: 6,
     title: "Departures and employment gaps",
     question: "Which of these describe how you left recent positions, and any gaps between them? Select all that apply.",
     whatHrChecks:
@@ -185,30 +208,6 @@ export const RISK_AREAS: RiskArea[] = [
       yellow:
         "Prepare a short, factual explanation (for example, restructuring, caregiving or education) and make sure your references would describe it the same way.",
       red: "Don't try to hide it. Prepare a truthful, forward-looking explanation and choose references who can speak to your performance. This is where a consultant helps most.",
-    },
-  },
-  {
-    key: "consistency",
-    number: 6,
-    title: "Consistency across records and profiles",
-    question: "How consistent are your resume, LinkedIn profile and past job applications?",
-    whatHrChecks:
-      "Recruiters routinely compare your resume with LinkedIn and with earlier applications. Mismatched dates, titles or employers raise credibility questions even when each one has an explanation.",
-    weight: 15,
-    category: "online",
-    options: [
-      { id: "match", label: "Resume, LinkedIn and applications all match", score: 1 },
-      { id: "minor", label: "Minor wording differences only", score: 3 },
-      { id: "nolinkedin", label: "My LinkedIn is missing or out of date", score: 4 },
-      { id: "unsure", label: "I haven't compared them recently", score: 5 },
-      { id: "differ", label: "Dates or titles differ between my resume and LinkedIn", score: 7 },
-      { id: "oldapps", label: "An old application or background check shows different details", score: 7 },
-      { id: "versions", label: "I've sent different resume versions with different details", score: 8 },
-    ],
-    prepare: {
-      green: "No action needed. Re-check LinkedIn whenever you update your resume.",
-      yellow: "Update LinkedIn so dates, titles and employers match your resume word for word.",
-      red: "Pick one accurate version of your history and update LinkedIn and your resume to match it before applying again.",
     },
   },
 ];
@@ -254,12 +253,20 @@ function bandOf(score: number): [number, number] {
   return score <= 3 ? [1, 3] : score <= 6 ? [4, 6] : [7, 10];
 }
 
+const LEGACY_IDS: Record<string, string> = { gt12: "6to12" };
+
 /** Normalises stored answers, including records saved before multi-select existed. */
 export function selectedIds(answer?: AreaAnswer | { optionId?: string }): string[] {
   if (!answer) return [];
   const a = answer as any;
-  if (Array.isArray(a.optionIds)) return a.optionIds.filter((x: unknown) => typeof x === "string");
-  return typeof a.optionId === "string" && a.optionId ? [a.optionId] : [];
+  const raw: string[] = Array.isArray(a.optionIds)
+    ? a.optionIds.filter((x: unknown) => typeof x === "string")
+    : typeof a.optionId === "string" && a.optionId
+      ? [a.optionId]
+      : [];
+  // Answer choices merged on Oct 7, 2026 ("Off by more than 12 months" became
+  // part of "Six months or more different").
+  return Array.from(new Set(raw.map((x) => LEGACY_IDS[x] || x)));
 }
 
 export function areaScore(area: RiskArea, answer?: AreaAnswer): number | null {

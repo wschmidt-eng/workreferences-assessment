@@ -86,7 +86,7 @@ The free plan won't work because it has no persistent disk: every restart would 
 3. Back in Render, click **Verify** next to the domain. If it fails, wait 10 to 30 minutes for DNS to update and try again.
 4. Once it's verified, Render issues the SSL certificate automatically and sends all `http://` traffic to `https://`.
 5. Open `https://assessment.workreferences.com/api/health`. It should show `{"ok":true}`.
-6. On workreferences.com, point every "Start My Free Assessment" button to `https://assessment.workreferences.com`.
+6. On workreferences.com, point every "Start My Free Assessment" button to `https://assessment.workreferences.com/#/?start=1&src=website`. This opens straight on question 1 (no second welcome page) and labels the visit as coming from your website in the admin funnel.
 
 **Optional, after it's verified:** in `render.yaml`, change `renderSubdomainPolicy: enabled` to `disabled` and push. The app will then only work at assessment.workreferences.com, and the onrender.com address will return "not found". Don't do this before the domain is verified, or the app will be unreachable.
 
@@ -125,7 +125,7 @@ If Readdy doesn't allow scripts, use the `<iframe>` line alone. It works, just w
 ## Step 5. Launch checklist
 
 - [ ] `https://assessment.workreferences.com/api/health` shows `{"ok":true}`, with a padlock in the browser
-- [ ] On workreferences.com, every "Start My Free Assessment" button opens `https://assessment.workreferences.com`
+- [ ] On workreferences.com, every "Start My Free Assessment" button opens `https://assessment.workreferences.com/#/?start=1&src=website`
 - [ ] Complete one real assessment. The results page loads, and the booking button opens vCita with your details filled in.
 - [ ] The alert email for that test arrives at w.schmidt@workreferences.com.
 - [ ] Upload a test resume, then open `/#/admin` with the new passcode and download it. A "Resume uploaded" alert arrives.
